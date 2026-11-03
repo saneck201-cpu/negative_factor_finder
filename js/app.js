@@ -9,11 +9,22 @@
   let lastFactors = null;
 
   // --- init UI
-  for (const p of Object.values(PROVIDERS)) {
-    const o = document.createElement('option');
-    o.value = p.id; o.textContent = p.title; $('provider').appendChild(o);
-  }
-  $('provider').value = LS.get('nff.provider') || 'checko';
+  const params = new URLSearchParams(location.search);
+  const dev = params.get('dev') === '1';
+  const MODE_TEXT = {
+    open: ['Открытые источники', 'без ключа; ЕГРЮЛ — автоматически, остальные реестры — ссылки для ручной проверки'],
+    spark: ['СПАРК', 'по вашему API-ключу'],
+    checko: ['Checko (тест)', 'по API-ключу'],
+    demo: ['Демо', 'выдуманные данные'],
+  };
+  const ids = Object.keys(PROVIDERS).filter((id) => dev || id === 'open' || id === 'spark');
+  let mode = LS.get('nff.provider');
+  if (!ids.includes(mode)) mode = ids[0];
+  $('modes').innerHTML = ids.map((id) =>
+    `<label class="mode" data-id="${id}"><input type="radio" name="mode" value="${id}"><b>${MODE_TEXT[id][0]}</b><span>${MODE_TEXT[id][1]}</span></label>`).join('');
+  const getMode = () => document.querySelector('input[name=mode]:checked').value;
+  document.querySelector(`input[name=mode][value="${mode}"]`).checked = true;
+
   $('key').value = LS.get('nff.key') || '';
   $('remember').checked = !!LS.get('nff.key');
   $('proxy').value = LS.get('nff.proxy') || '';
@@ -21,13 +32,18 @@
     `<label><input type="checkbox" value="${f.id}" checked> ${f.title}</label>`).join('');
 
   function refreshProvider() {
-    const p = PROVIDERS[$('provider').value];
+    const p = PROVIDERS[getMode()];
+    document.querySelectorAll('.mode').forEach((el) => el.classList.toggle('on', el.dataset.id === p.id));
     $('keyBox').style.display = p.needsKey ? '' : 'none';
-    $('hint').textContent = p.needsKey
-      ? 'Ключ берётся в личном кабинете провайдера (Checko.ru, есть бесплатный тариф с лимитом запросов). На одну организацию тратится до 8 запросов — отключите ненужные факторы, чтобы экономить лимит.'
-      : 'Демо-режим: данные выдуманные, нужен только чтобы посмотреть, как выглядит таблица.';
+    $('proxyBox').style.display = p.needsProxy ? '' : 'none';
+    $('hint').textContent = {
+      open: 'Без ключа браузер не может обращаться к госреестрам напрямую, поэтому нужен свой бесплатный прокси. Автоматически проверяется статус в ЕГРЮЛ; по остальным факторам в таблице будут ссылки для ручной проверки.',
+      spark: 'Подключение к СПАРК в работе: пока выбрать этот режим можно, но проверка не запустится.',
+      checko: 'Тестовый режим разработчика.',
+      demo: 'Демо-режим: данные выдуманные.',
+    }[p.id];
   }
-  $('provider').addEventListener('change', refreshProvider);
+  document.querySelectorAll('input[name=mode]').forEach((el) => el.addEventListener('change', refreshProvider));
   refreshProvider();
 
   // --- run
@@ -41,7 +57,9 @@
   $('run').addEventListener('click', async () => {
     const queries = [...new Set($('orgs').value.split('\n').map((s) => s.trim()).filter(Boolean))];
     if (!queries.length) { $('status').textContent = 'Введите хотя бы одну организацию.'; return; }
-    const provider = PROVIDERS[$('provider').value];
+    const provider = PROVIDERS[getMode()];
+    if (provider.ready === false) { $('status').textContent = provider.notReadyMessage; return; }
+    if (provider.needsProxy && !$('proxy').value.trim()) { $('status').textContent = 'Укажите адрес вашего прокси (см. worker/README.md).'; return; }
     const key = $('key').value.trim();
     if (provider.needsKey && !key) { $('status').textContent = 'Введите API-ключ.'; return; }
     const factors = FACTORS.filter((f) => document.querySelector(`#factorList input[value="${f.id}"]`).checked);
@@ -83,7 +101,7 @@
   function render(results, factors) {
     const head = `<tr><th>Организация</th>${factors.map((f) => `<th>${esc(f.title)}</th>`).join('')}<th>Факторов найдено</th></tr>`;
     const body = results.map((r) => {
-      const name = r.found ? `${esc(r.name)}<span class="src">ИНН ${esc(r.inn || '—')}</span>` : `${esc(r.query)}<span class="src">${esc(r.error || 'организация не найдена')}</span>`;
+      const name = r.found ? `${esc(r.name)}<span class="src">ИНН ${esc(r.inn || '—')}${r.note ? ' · ' + esc(r.note) : ''}</span>` : `${esc(r.query)}<span class="src">${esc(r.error || 'организация не найдена')}</span>`;
       const tds = factors.map((f) => {
         const c = r.cells[f.id];
         if (!c || c.state === 'none') return '<td></td>';
@@ -102,12 +120,12 @@
     const matrix = [[H('Организация'), H('ИНН'), H('ОГРН'), ...lastFactors.map((f) => H(f.title)), H('Факторов найдено')]];
     for (const r of lastResults) {
       matrix.push([
-        { v: r.found ? r.name : `${r.query} (не найдена${r.error ? ': ' + r.error : ''})`, s: 5 },
+        { v: r.found ? r.name + (r.note ? " (" + r.note + ")" : "") : `${r.query} (не найдена${r.error ? ': ' + r.error : ''})`, s: 5 },
         { v: r.inn || '', s: 2 },
         { v: r.ogrn || '', s: 2 },
         ...lastFactors.map((f) => {
           const c = r.cells[f.id];
-          const st = !c || c.state === 'none' ? 2 : c.state === 'hit' ? 3 : 4;
+          const st = !c || c.state === 'none' ? 2 : c.state === 'hit' ? 3 : 4; // hit — красная, остальное — жёлтая
           return { v: cellText(c), s: st };
         }),
         { v: hitsCount(r), s: 2 },
@@ -115,7 +133,7 @@
     }
     const src = [[H('Сокр.'), H('Источник'), H('Ссылка')]];
     for (const [k, s] of Object.entries(SOURCES_LIST)) src.push([{ v: k, s: 2 }, { v: s.name, s: 2 }, { v: s.url({ inn: '' }), s: 2 }]);
-    src.push([null], [{ v: 'Красная ячейка — фактор найден; жёлтая — проверить не удалось (это не означает «чисто»); пустая — фактор не обнаружен.', s: 0 }]);
+    src.push([null], [{ v: 'Красная ячейка — фактор найден; жёлтая — автоматически проверить не удалось или нужна ручная проверка по ссылке (это не означает «чисто»); пустая — фактор не обнаружен.', s: 0 }]);
 
     const blob = buildXlsx([
       { name: 'Факторы', rows: matrix, widths: [34, 14, 16, ...lastFactors.map(() => 38), 12], freeze: { col: 1, row: 1 }, headerHeight: 62 },

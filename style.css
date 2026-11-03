@@ -29,3 +29,10 @@ th:first-child{background:var(--accent)}
 td.hit{background:var(--hit)}td.unknown{background:var(--unk)}
 td .src{display:block;margin-top:4px;color:var(--muted);font-size:12px;word-break:break-all}
 footer{margin-top:24px;color:var(--muted);font-size:12px}
+
+.modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-bottom:6px}
+.mode{display:block;margin:0;padding:12px 14px;border:2px solid var(--line);border-radius:8px;cursor:pointer;font-weight:400}
+.mode input{position:absolute;opacity:0}
+.mode b{display:block}.mode span{color:var(--muted);font-size:13px}
+.mode.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
+td.manual{background:var(--unk)}

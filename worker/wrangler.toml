@@ -1,0 +1,7 @@
+name = "nff-proxy"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+# После запуска сайта на GitHub Pages можно ограничить прокси только вашим сайтом:
+# [vars]
+# ALLOWED_ORIGIN = "https://saneck201-cpu.github.io"

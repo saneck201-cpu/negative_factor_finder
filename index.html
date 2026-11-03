@@ -15,23 +15,23 @@
     <label for="orgs">Организации</label>
     <textarea id="orgs" rows="8" placeholder="ООО «Ромашка»&#10;7707083893&#10;АО Пример"></textarea>
 
+    <label>Откуда брать данные</label>
+    <div class="modes" id="modes"></div>
+
     <div class="grid">
-      <div>
-        <label for="provider">Источник данных</label>
-        <select id="provider"></select>
-      </div>
       <div id="keyBox">
-        <label for="key">API-ключ</label>
-        <input id="key" type="password" autocomplete="off" placeholder="ключ вашего аккаунта">
+        <label for="key">API-ключ СПАРК</label>
+        <input id="key" type="password" autocomplete="off" placeholder="ключ из договора со СПАРК">
         <label class="inline"><input type="checkbox" id="remember"> запомнить в этом браузере</label>
+      </div>
+      <div id="proxyBox">
+        <label for="proxy">Адрес вашего прокси (Cloudflare Worker)</label>
+        <input id="proxy" type="text" placeholder="https://имя.аккаунт.workers.dev/?url=">
+        <label class="inline">Как развернуть — в <a href="worker/README.md">worker/README.md</a></label>
       </div>
       <div>
         <label for="months">Период для «смен», мес.</label>
         <input id="months" type="number" min="1" max="120" value="12">
-      </div>
-      <div>
-        <label for="proxy">CORS-прокси (необязательно)</label>
-        <input id="proxy" type="text" placeholder="https://… (URL подставляется в конец)">
       </div>
     </div>
 

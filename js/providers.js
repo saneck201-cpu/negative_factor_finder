@@ -235,6 +235,81 @@
     },
   };
 
-  global.PROVIDERS = { checko, demo };
+  /* ---------- Открытые источники (без ключа, через свой прокси) ---------- */
+  const OPEN_SRC = {
+    status: 'egrul', unreliable: 'pb', massaddr: 'pb', massperson: 'pb', rnp: 'rnp', taxdebt: 'pb',
+    chdir: 'egrul', chowner: 'egrul', chaddr: 'egrul', fssp: 'fssp', courts: 'kad', bankr: 'efrsb',
+    fedres: 'fedres', inspect: 'insp', fin: 'gir',
+  };
+  const open = {
+    id: 'open',
+    title: 'Открытые источники (без ключа)',
+    needsKey: false,
+    needsProxy: true,
+
+    async viaProxy(url, init, proxy) {
+      const r = await fetch(proxy + encodeURIComponent(url), init);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    },
+
+    /* ЕГРЮЛ ФНС: поиск по названию/ИНН/ОГРН */
+    async searchEgrul(query, proxy) {
+      const t = await this.viaProxy('https://egrul.nalog.ru/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'vyp3CaptchaToken=&page=&query=' + encodeURIComponent(query) + '&region=&PreventChromeAutocomplete=',
+      }, proxy);
+      if (!t || !t.t) throw new Error('ЕГРЮЛ не вернул токен поиска');
+      for (let i = 0; i < 6; i++) {
+        const j = await this.viaProxy('https://egrul.nalog.ru/search-result/' + t.t, {}, proxy);
+        if (j && Array.isArray(j.rows)) return j.rows;
+        await new Promise((r) => setTimeout(r, 700));
+      }
+      throw new Error('ЕГРЮЛ не ответил вовремя');
+    },
+
+    async check(query, opts) {
+      const base = { query, inn: '', ogrn: '', name: '', found: false, cells: {} };
+      if (!opts.proxy) throw new Error('не указан адрес прокси');
+      const rows = await this.searchEgrul(query, opts.proxy);
+      if (!rows.length) return base;
+      const row = rows[0];
+      base.found = true;
+      base.inn = String(row.i || '');
+      base.ogrn = String(row.o || '');
+      base.name = String(row.n || query);
+      if (rows.length > 1) base.note = `найдено совпадений: ${rows.length}, взято первое — сверьте ИНН`;
+      const o = { inn: base.inn };
+
+      for (const f of opts.factors) {
+        const srcKey = OPEN_SRC[f.id];
+        const src = SRC[srcKey];
+        base.cells[f.id] = {
+          state: 'manual',
+          text: `Проверьте вручную по ИНН ${base.inn || '—'}`,
+          source: `${src.name}: ${src.url(o)}`,
+        };
+      }
+      if (opts.factors.some((f) => f.id === 'status')) {
+        base.cells.status = row.e
+          ? { state: 'hit', text: `Деятельность прекращена ${row.e}`, source: `${SRC.egrul.name}: ${SRC.egrul.url(o)}` }
+          : { state: 'none' };
+      }
+      return base;
+    },
+  };
+
+  /* ---------- СПАРК (заготовка: подключение появится, когда будет документация API) ---------- */
+  const spark = {
+    id: 'spark',
+    title: 'СПАРК (по API-ключу)',
+    needsKey: true,
+    ready: false,
+    notReadyMessage: 'Подключение к СПАРК ещё не настроено: нужны адрес API, способ авторизации и пример ответа из документации Интерфакса.',
+    async check() { throw new Error(this.notReadyMessage); },
+  };
+
+  global.PROVIDERS = { open, spark, checko, demo };
   global.SOURCES_LIST = SRC;
 })(typeof window !== 'undefined' ? window : globalThis);
