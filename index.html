@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Поиск отрицательных факторов по организациям</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1>Отрицательные факторы по организациям</h1>
+  <p class="lead">Вставьте список организаций (названия или ИНН/ОГРН, по одной в строке) — получите Excel-таблицу: организации по вертикали, факторы по горизонтали, в ячейках — расшифровка и источник.</p>
+
+  <section class="card">
+    <label for="orgs">Организации</label>
+    <textarea id="orgs" rows="8" placeholder="ООО «Ромашка»&#10;7707083893&#10;АО Пример"></textarea>
+
+    <div class="grid">
+      <div>
+        <label for="provider">Источник данных</label>
+        <select id="provider"></select>
+      </div>
+      <div id="keyBox">
+        <label for="key">API-ключ</label>
+        <input id="key" type="password" autocomplete="off" placeholder="ключ вашего аккаунта">
+        <label class="inline"><input type="checkbox" id="remember"> запомнить в этом браузере</label>
+      </div>
+      <div>
+        <label for="months">Период для «смен», мес.</label>
+        <input id="months" type="number" min="1" max="120" value="12">
+      </div>
+      <div>
+        <label for="proxy">CORS-прокси (необязательно)</label>
+        <input id="proxy" type="text" placeholder="https://… (URL подставляется в конец)">
+      </div>
+    </div>
+
+    <details>
+      <summary>Какие факторы проверять</summary>
+      <div id="factorList" class="factors"></div>
+    </details>
+
+    <div class="actions">
+      <button id="run" class="primary">Проверить</button>
+      <button id="download" disabled>Скачать Excel</button>
+      <span id="status"></span>
+    </div>
+    <p class="hint" id="hint"></p>
+  </section>
+
+  <section id="result" hidden>
+    <h2>Предпросмотр</h2>
+    <div class="scroll"><table id="preview"></table></div>
+  </section>
+
+  <footer>Данные берутся из открытых государственных реестров через стороннего API-провайдера. Сайт ничего не хранит на сервере: запросы идут из вашего браузера. Перечень источников — в <a href="SOURCES.md">SOURCES.md</a>. Информация носит справочный характер, перед принятием решений проверяйте её в первоисточнике.</footer>
+</main>
+<script src="js/xlsx.js"></script>
+<script src="js/factors.js"></script>
+<script src="js/providers.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
