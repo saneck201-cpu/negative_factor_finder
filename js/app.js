@@ -13,11 +13,11 @@
   const dev = params.get('dev') === '1';
   const MODE_TEXT = {
     open: ['Открытые источники', 'без ключа; ЕГРЮЛ — автоматически, остальные реестры — ссылки для ручной проверки'],
-    spark: ['СПАРК', 'по вашему API-ключу'],
+    spark: ['СПАРК', 'полная автоматическая проверка по API-ключу (подключится после выдачи ключа)'],
     checko: ['Checko (тест)', 'по API-ключу'],
-    demo: ['Демо', 'выдуманные данные'],
+    demo: ['Демо для показа', 'вымышленные данные: так будет выглядеть итоговая таблица'],
   };
-  const ids = Object.keys(PROVIDERS).filter((id) => dev || id === 'open' || id === 'spark');
+  const ids = Object.keys(PROVIDERS).filter((id) => dev || id !== 'checko');
   let mode = LS.get('nff.provider');
   if (!ids.includes(mode)) mode = ids[0];
   $('modes').innerHTML = ids.map((id) =>
@@ -34,13 +34,14 @@
   function refreshProvider() {
     const p = PROVIDERS[getMode()];
     document.querySelectorAll('.mode').forEach((el) => el.classList.toggle('on', el.dataset.id === p.id));
+    $('demoBanner').hidden = p.id !== 'demo';
     $('keyBox').style.display = p.needsKey ? '' : 'none';
     $('proxyBox').style.display = p.needsProxy ? '' : 'none';
     $('hint').textContent = {
       open: 'Без ключа браузер не может обращаться к госреестрам напрямую, поэтому нужен свой бесплатный прокси. Автоматически проверяется статус в ЕГРЮЛ; по остальным факторам в таблице будут ссылки для ручной проверки.',
       spark: 'Подключение к СПАРК в работе: пока выбрать этот режим можно, но проверка не запустится.',
       checko: 'Тестовый режим разработчика.',
-      demo: 'Демо-режим: данные выдуманные.',
+      demo: 'Демо-режим: данные вымышленные. Введите любые названия или ИНН, чтобы увидеть, как выглядит таблица.',
     }[p.id];
   }
   document.querySelectorAll('input[name=mode]').forEach((el) => el.addEventListener('change', refreshProvider));
@@ -145,7 +146,7 @@
   $('download').addEventListener('click', () => {
     if (!lastResults) return;
     const H = (v) => ({ v, s: 1 });
-    const matrix = [[H('Организация'), H('ИНН'), H('ОГРН'), ...lastFactors.map((f) => H(f.title)), H('Факторов найдено')]];
+    const matrix = [[H(getMode() === 'demo' ? 'Организация (ДЕМО: данные вымышленные)' : 'Организация'), H('ИНН'), H('ОГРН'), ...lastFactors.map((f) => H(f.title)), H('Факторов найдено')]];
     for (const r of lastResults) {
       matrix.push([
         { v: r.found ? r.name + (r.note ? " (" + r.note + ")" : "") : `${r.query} (не найдена${r.error ? ': ' + r.error : ''})`, s: 5 },
@@ -169,7 +170,7 @@
     ]);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `negative_factors_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.download = `${getMode() === 'demo' ? 'DEMO_' : ''}negative_factors_${new Date().toISOString().slice(0, 10)}.xlsx`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   });

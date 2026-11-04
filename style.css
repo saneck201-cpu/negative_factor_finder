@@ -36,3 +36,4 @@ footer{margin-top:24px;color:var(--muted);font-size:12px}
 .mode b{display:block}.mode span{color:var(--muted);font-size:13px}
 .mode.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
 td.manual{background:var(--unk)}
+.banner{background:var(--unk);border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-weight:600}

@@ -211,36 +211,53 @@
     },
   };
 
-  /* ---------- Демо-режим (выдуманные данные, чтобы проверить интерфейс и выгрузку) ---------- */
-  const demo = {
-    id: 'demo',
-    title: 'Демо (выдуманные данные, без ключа)',
-    needsKey: false,
-    async check(query, opts) {
-      let h = 0;
-      for (const ch of query) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-      const inn = String(7700000000 + (h % 99999999)).slice(0, 10);
-      const base = { query, inn, ogrn: String(1027700000000 + (h % 99999999)), name: query, found: true, cells: {} };
-      opts.factors.forEach((f, i) => {
-        const r = ((h >>> (i % 16)) + i * 7) % 10;
-        if (r < 3) {
-          const srcKey = { company: 'egrul', timeline: 'egrul', enforcements: 'fssp', 'legal-cases': 'kad',
-            'bankruptcy-messages': 'efrsb', fedresurs: 'fedres', inspections: 'insp', finances: 'gir' }[f.needs];
-          base.cells[f.id] = { state: 'hit', text: `[ДЕМО] Условная расшифровка: ${f.title}`, source: `${SRC[srcKey].name}: ${SRC[srcKey].url({ inn })}` };
-        } else if (r === 9) base.cells[f.id] = { state: 'unknown', text: '[ДЕМО] Не удалось проверить' };
-        else base.cells[f.id] = { state: 'none' };
-      });
-      await new Promise((r) => setTimeout(r, 150));
-      return base;
-    },
-  };
-
-  /* ---------- Открытые источники (без ключа, через свой прокси) ---------- */
   const OPEN_SRC = {
     status: 'egrul', unreliable: 'pb', massaddr: 'pb', massperson: 'pb', rnp: 'rnp', taxdebt: 'pb',
     chdir: 'egrul', chowner: 'egrul', chaddr: 'egrul', fssp: 'fssp', courts: 'kad', bankr: 'efrsb',
     fedres: 'fedres', inspect: 'insp', fin: 'gir',
   };
+
+  /* ---------- Демо-режим: ВЫМЫШЛЕННЫЕ данные, чтобы показать, как будет выглядеть результат ---------- */
+  const DEMO_TEXT = {
+    status:     (h) => ['Статус в ЕГРЮЛ: находится в процессе ликвидации', 'Статус в ЕГРЮЛ: исключается как недействующее юрлицо'][h % 2],
+    unreliable: (h) => `В ЕГРЮЛ отметка о недостоверности сведений о руководителе (с ${10 + h % 18}.0${1 + h % 9}.2026)`,
+    massaddr:   () => 'Юридический адрес числится как адрес массовой регистрации',
+    massperson: (h) => `Руководитель значится в ${3 + h % 20} организациях одновременно`,
+    rnp:        (h) => `В реестре недобросовестных поставщиков с ${10 + h % 18}.0${1 + h % 9}.2026 (контракт № 0${h % 900000})`,
+    taxdebt:    (h) => `Задолженность по налогам и сборам: ${(120 + h % 900) * 1000} ₽`,
+    chdir:      (h) => `Смена руководителя: ${1 + h % 3} изм. за период, последняя ${10 + h % 18}.0${1 + h % 9}.2026`,
+    chowner:    (h) => `Смена учредителей: ${1 + h % 2} изм. за период, последняя ${10 + h % 18}.0${1 + h % 9}.2026`,
+    chaddr:     (h) => `Смена юридического адреса: последняя ${10 + h % 18}.0${1 + h % 9}.2026`,
+    fssp:       (h) => `Исполнительных производств: ${1 + h % 7}, сумма ≈ ${(40 + h % 1500) * 1000} ₽`,
+    courts:     (h) => `Дел в роли ответчика: ${2 + h % 8}, с признаками удовлетворения иска: ${1 + h % 3}, сумма исков ≈ ${(200 + h % 4000) * 1000} ₽`,
+    bankr:      (h) => `Сообщение о намерении обратиться в суд с заявлением о банкротстве от ${10 + h % 18}.0${1 + h % 9}.2026`,
+    fedres:     () => 'Сообщение о принятии решения о ликвидации',
+    inspect:    (h) => `Проверок с выявленными нарушениями: ${1 + h % 3}`,
+    fin:        (h) => `За 2025 г.: чистый убыток ${(300 + h % 5000) * 1000} ₽; отрицательный капитал`,
+  };
+  const demo = {
+    id: 'demo',
+    title: 'Демо (вымышленные данные)',
+    needsKey: false,
+    async check(query, opts) {
+      let h = 0;
+      for (const ch of query) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+      const inn = /^\d{10,12}$/.test(query) ? query : String(7700000000 + (h % 99999999)).slice(0, 10);
+      const base = { query, inn, ogrn: String(1027700000000 + (h % 99999999)), name: query, found: true, cells: {} };
+      opts.factors.forEach((f, i) => {
+        const r = ((h >>> (i % 16)) + i * 7) % 10;
+        const srcKey = { company: 'egrul', timeline: 'egrul', enforcements: 'fssp', 'legal-cases': 'kad',
+          'bankruptcy-messages': 'efrsb', fedresurs: 'fedres', inspections: 'insp', finances: 'gir' }[f.needs];
+        if (f.id === 'rnp') base.cells[f.id] = r < 2 ? { state: 'hit', text: '[ДЕМО] ' + DEMO_TEXT.rnp(h + i), source: `${SRC.rnp.name}: ${SRC.rnp.url({ inn })}` } : { state: 'none' };
+        else if (r < 3) base.cells[f.id] = { state: 'hit', text: '[ДЕМО] ' + DEMO_TEXT[f.id](h + i * 13), source: `${SRC[OPEN_SRC[f.id] || srcKey].name}: ${SRC[OPEN_SRC[f.id] || srcKey].url({ inn })}` };
+        else base.cells[f.id] = { state: 'none' };
+      });
+      await new Promise((r) => setTimeout(r, 250));
+      return base;
+    },
+  };
+
+  /* ---------- Открытые источники (без ключа, через свой прокси) ---------- */
   const open = {
     id: 'open',
     title: 'Открытые источники (без ключа)',
@@ -316,6 +333,6 @@
     async check() { throw new Error(this.notReadyMessage); },
   };
 
-  global.PROVIDERS = { open, spark, checko, demo };
+  global.PROVIDERS = { demo, spark, open, checko };
   global.SOURCES_LIST = SRC;
 })(typeof window !== 'undefined' ? window : globalThis);
