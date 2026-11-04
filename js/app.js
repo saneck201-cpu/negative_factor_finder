@@ -12,12 +12,11 @@
   const params = new URLSearchParams(location.search);
   const dev = params.get('dev') === '1';
   const MODE_TEXT = {
-    open: ['Открытые источники', 'без ключа; ЕГРЮЛ — автоматически, остальные реестры — ссылки для ручной проверки'],
     spark: ['СПАРК', 'полная автоматическая проверка по API-ключу (подключится после выдачи ключа)'],
     checko: ['Checko (тест)', 'по API-ключу'],
     demo: ['Демо для показа', 'вымышленные данные: так будет выглядеть итоговая таблица'],
   };
-  const ids = Object.keys(PROVIDERS).filter((id) => dev || id !== 'checko');
+  const ids = Object.keys(PROVIDERS).filter((id) => dev || id === 'demo' || id === 'spark');
   let mode = LS.get('nff.provider');
   if (!ids.includes(mode)) mode = ids[0];
   $('modes').innerHTML = ids.map((id) =>
@@ -27,7 +26,6 @@
 
   $('key').value = LS.get('nff.key') || '';
   $('remember').checked = !!LS.get('nff.key');
-  $('proxy').value = LS.get('nff.proxy') || '';
   $('factorList').innerHTML = FACTORS.map((f) =>
     `<label><input type="checkbox" value="${f.id}" checked> ${f.title}</label>`).join('');
 
@@ -36,9 +34,7 @@
     document.querySelectorAll('.mode').forEach((el) => el.classList.toggle('on', el.dataset.id === p.id));
     $('demoBanner').hidden = p.id !== 'demo';
     $('keyBox').style.display = p.needsKey ? '' : 'none';
-    $('proxyBox').style.display = p.needsProxy ? '' : 'none';
     $('hint').textContent = {
-      open: 'Без ключа браузер не может обращаться к госреестрам напрямую, поэтому нужен свой бесплатный прокси. Автоматически проверяется статус в ЕГРЮЛ; по остальным факторам в таблице будут ссылки для ручной проверки.',
       spark: 'Подключение к СПАРК в работе: пока выбрать этот режим можно, но проверка не запустится.',
       checko: 'Тестовый режим разработчика.',
       demo: 'Демо-режим: данные вымышленные. Введите любые названия или ИНН, чтобы увидеть, как выглядит таблица.',
@@ -46,34 +42,6 @@
   }
   document.querySelectorAll('input[name=mode]').forEach((el) => el.addEventListener('change', refreshProvider));
   refreshProvider();
-
-  // --- прокси: нормализация адреса и проверка
-  function normProxy(v) {
-    v = v.trim();
-    if (!v) return '';
-    if (!/^https?:\/\//i.test(v)) v = 'https://' + v;
-    if (!/[?&]url=/.test(v)) v = v.replace(/[?\/]*$/, '') + '/?url=';
-    return v;
-  }
-  $('checkProxy').addEventListener('click', async () => {
-    const proxy = normProxy($('proxy').value);
-    const out = $('proxyStatus');
-    if (!proxy) { out.textContent = 'Введите адрес прокси.'; return; }
-    $('proxy').value = proxy;
-    out.textContent = 'Проверяю…';
-    try { await fetch(proxy.replace(/\?url=.*$/, '?ping=1')); }
-    catch (e) { out.textContent = 'Прокси недоступен: проверьте адрес Worker (должен открываться в браузере) и что он развёрнут (Deploy).'; return; }
-    try {
-      const r = await fetch(proxy + encodeURIComponent('https://egrul.nalog.ru/'));
-      let extra = '';
-      try { const j = await r.clone().json(); if (j.error) extra = ' ' + j.error; } catch (e) { /* html */ }
-      out.textContent = r.ok
-        ? 'Прокси работает, ЕГРЮЛ отвечает.'
-        : `Прокси работает, но до ЕГРЮЛ не дошёл (HTTP ${r.status}${extra}). Скорее всего ФНС блокирует зарубежные адреса Cloudflare.`;
-    } catch (e) {
-      out.textContent = 'Прокси ответил без CORS-заголовков: обновите код Worker из worker/worker.js и нажмите Deploy.';
-    }
-  });
 
   // --- run
   async function pool(items, n, fn) {
@@ -88,17 +56,15 @@
     if (!queries.length) { $('status').textContent = 'Введите хотя бы одну организацию.'; return; }
     const provider = PROVIDERS[getMode()];
     if (provider.ready === false) { $('status').textContent = provider.notReadyMessage; return; }
-    if (provider.needsProxy && !$('proxy').value.trim()) { $('status').textContent = 'Укажите адрес вашего прокси (см. worker/README.md).'; return; }
     const key = $('key').value.trim();
     if (provider.needsKey && !key) { $('status').textContent = 'Введите API-ключ.'; return; }
     const factors = FACTORS.filter((f) => document.querySelector(`#factorList input[value="${f.id}"]`).checked);
     if (!factors.length) { $('status').textContent = 'Выберите хотя бы один фактор.'; return; }
 
     LS.set('nff.provider', provider.id);
-    LS.set('nff.proxy', normProxy($('proxy').value));
     if ($('remember').checked && key) LS.set('nff.key', key); else LS.del('nff.key');
 
-    const opts = { key, factors, months: Math.max(1, +$('months').value || 12), proxy: normProxy($('proxy').value) };
+    const opts = { key, factors, months: Math.max(1, +$('months').value || 12) };
     const results = new Array(queries.length);
     let done = 0;
     $('run').disabled = true; $('download').disabled = true;
