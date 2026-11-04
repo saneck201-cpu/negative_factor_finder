@@ -248,8 +248,14 @@
     needsProxy: true,
 
     async viaProxy(url, init, proxy) {
-      const r = await fetch(proxy + encodeURIComponent(url), init);
-      if (!r.ok) throw new Error('HTTP ' + r.status);
+      let r;
+      try { r = await fetch(proxy + encodeURIComponent(url), init); }
+      catch (e) { throw new Error('прокси не отвечает (проверьте адрес и кнопку «Проверить прокси»)'); }
+      if (!r.ok) {
+        let extra = '';
+        try { const j = await r.clone().json(); if (j.error) extra = ': ' + j.error; } catch (e) { /* не JSON */ }
+        throw new Error('прокси вернул HTTP ' + r.status + extra);
+      }
       return r.json();
     },
 

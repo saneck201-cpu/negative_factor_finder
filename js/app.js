@@ -46,6 +46,34 @@
   document.querySelectorAll('input[name=mode]').forEach((el) => el.addEventListener('change', refreshProvider));
   refreshProvider();
 
+  // --- прокси: нормализация адреса и проверка
+  function normProxy(v) {
+    v = v.trim();
+    if (!v) return '';
+    if (!/^https?:\/\//i.test(v)) v = 'https://' + v;
+    if (!/[?&]url=/.test(v)) v = v.replace(/[?\/]*$/, '') + '/?url=';
+    return v;
+  }
+  $('checkProxy').addEventListener('click', async () => {
+    const proxy = normProxy($('proxy').value);
+    const out = $('proxyStatus');
+    if (!proxy) { out.textContent = 'Введите адрес прокси.'; return; }
+    $('proxy').value = proxy;
+    out.textContent = 'Проверяю…';
+    try { await fetch(proxy.replace(/\?url=.*$/, '?ping=1')); }
+    catch (e) { out.textContent = 'Прокси недоступен: проверьте адрес Worker (должен открываться в браузере) и что он развёрнут (Deploy).'; return; }
+    try {
+      const r = await fetch(proxy + encodeURIComponent('https://egrul.nalog.ru/'));
+      let extra = '';
+      try { const j = await r.clone().json(); if (j.error) extra = ' ' + j.error; } catch (e) { /* html */ }
+      out.textContent = r.ok
+        ? 'Прокси работает, ЕГРЮЛ отвечает.'
+        : `Прокси работает, но до ЕГРЮЛ не дошёл (HTTP ${r.status}${extra}). Скорее всего ФНС блокирует зарубежные адреса Cloudflare.`;
+    } catch (e) {
+      out.textContent = 'Прокси ответил без CORS-заголовков: обновите код Worker из worker/worker.js и нажмите Deploy.';
+    }
+  });
+
   // --- run
   async function pool(items, n, fn) {
     let i = 0;
@@ -66,10 +94,10 @@
     if (!factors.length) { $('status').textContent = 'Выберите хотя бы один фактор.'; return; }
 
     LS.set('nff.provider', provider.id);
-    LS.set('nff.proxy', $('proxy').value.trim());
+    LS.set('nff.proxy', normProxy($('proxy').value));
     if ($('remember').checked && key) LS.set('nff.key', key); else LS.del('nff.key');
 
-    const opts = { key, factors, months: Math.max(1, +$('months').value || 12), proxy: $('proxy').value.trim() };
+    const opts = { key, factors, months: Math.max(1, +$('months').value || 12), proxy: normProxy($('proxy').value) };
     const results = new Array(queries.length);
     let done = 0;
     $('run').disabled = true; $('download').disabled = true;

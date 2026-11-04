@@ -18,7 +18,11 @@ export default {
     };
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
 
-    const target = new URL(request.url).searchParams.get('url');
+    const sp = new URL(request.url).searchParams;
+    if (sp.get('ping')) {
+      return new Response(JSON.stringify({ ok: true }), { headers: { ...cors, 'Content-Type': 'application/json' } });
+    }
+    const target = sp.get('url');
     let u;
     try { u = new URL(target); } catch (e) { return new Response('bad url', { status: 400, headers: cors }); }
     if (u.protocol !== 'https:' || !ALLOWED_HOSTS.includes(u.hostname)) {
@@ -32,11 +36,17 @@ export default {
     const ct = request.headers.get('Content-Type');
     if (ct) headers.set('Content-Type', ct);
     headers.set('User-Agent', 'Mozilla/5.0 (compatible; negative-factor-finder)');
-    const upstream = await fetch(u.toString(), {
-      method: request.method,
-      headers,
-      body: request.method === 'POST' ? await request.arrayBuffer() : undefined,
-    });
+    let upstream;
+    try {
+      upstream = await fetch(u.toString(), {
+        method: request.method,
+        headers,
+        body: request.method === 'POST' ? await request.arrayBuffer() : undefined,
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: 'upstream fetch failed: ' + e.message }),
+        { status: 502, headers: { ...cors, 'Content-Type': 'application/json' } });
+    }
     const out = new Headers(cors);
     out.set('Content-Type', upstream.headers.get('Content-Type') || 'application/octet-stream');
     return new Response(upstream.body, { status: upstream.status, headers: out });
