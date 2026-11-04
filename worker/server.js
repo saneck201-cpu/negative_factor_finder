@@ -12,6 +12,26 @@ const PORT = +process.env.PORT || 8787;
 const HOST = process.env.HOST || '127.0.0.1';
 const ORIGIN = process.env.ALLOWED_ORIGIN || '*';
 
+
+// Редиректы обрабатываем сами и всегда поднимаем http -> https (ФНС может отправлять на http://, а порт 80 может быть закрыт).
+async function fetchFollow(url, init, hosts) {
+  let u = new URL(url);
+  for (let i = 0; i < 5; i++) {
+    const r = await fetch(u, { ...init, redirect: 'manual' });
+    const loc = r.headers.get('location');
+    if (r.status >= 300 && r.status < 400 && loc) {
+      u = new URL(loc, u);
+      u.protocol = 'https:';
+      u.port = '';
+      if (!hosts.includes(u.hostname)) throw new Error('redirect to disallowed host ' + u.hostname);
+      if (r.status === 301 || r.status === 302 || r.status === 303) { init = { ...init, method: 'GET', body: undefined }; }
+      continue;
+    }
+    return r;
+  }
+  throw new Error('too many redirects');
+}
+
 const cors = {
   'Access-Control-Allow-Origin': ORIGIN,
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -39,11 +59,11 @@ http.createServer(async (req, res) => {
   const headers = { 'User-Agent': 'Mozilla/5.0 (compatible; negative-factor-finder)' };
   if (req.headers['content-type']) headers['Content-Type'] = req.headers['content-type'];
   try {
-    const up = await fetch(u, {
+    const up = await fetchFollow(u, {
       method: req.method, headers,
       body: req.method === 'POST' ? Buffer.concat(chunks) : undefined,
       signal: AbortSignal.timeout(20000),
-    });
+    }, ALLOWED_HOSTS);
     send(res, up.status, Buffer.from(await up.arrayBuffer()), up.headers.get('content-type') || 'application/octet-stream');
   } catch (e) {
     const c = e.cause ? ` [${e.cause.code || ''} ${e.cause.message || e.cause}]` : '';
