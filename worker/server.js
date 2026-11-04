@@ -46,6 +46,8 @@ http.createServer(async (req, res) => {
     });
     send(res, up.status, Buffer.from(await up.arrayBuffer()), up.headers.get('content-type') || 'application/octet-stream');
   } catch (e) {
-    send(res, 502, JSON.stringify({ error: 'upstream fetch failed: ' + e.message }), 'application/json');
+    const c = e.cause ? ` [${e.cause.code || ''} ${e.cause.message || e.cause}]` : '';
+    console.error('Ошибка запроса к', u.hostname, e.message + c);
+    send(res, 502, JSON.stringify({ error: 'upstream fetch failed: ' + e.message + c }), 'application/json');
   }
 }).listen(PORT, HOST, () => console.log(`Прокси запущен: http://${HOST}:${PORT}/?url=`));
