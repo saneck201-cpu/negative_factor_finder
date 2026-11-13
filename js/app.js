@@ -11,12 +11,14 @@
   // --- init UI
   const params = new URLSearchParams(location.search);
   const dev = params.get('dev') === '1';
+  const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
   const MODE_TEXT = {
+    local: ['Программа на этом компьютере', 'запросы идут с вашего ПК: ЕГРЮЛ и РНП автоматически, остальное — ссылки на реестры'],
     spark: ['СПАРК', 'полная автоматическая проверка по API-ключу (подключится после выдачи ключа)'],
     checko: ['Checko (тест)', 'по API-ключу'],
     demo: ['Демо для показа', 'вымышленные данные: так будет выглядеть итоговая таблица'],
   };
-  const ids = Object.keys(PROVIDERS).filter((id) => dev || id === 'demo' || id === 'spark');
+  const ids = Object.keys(PROVIDERS).filter((id) => dev || id === 'demo' || id === 'spark' || (isLocal && id === 'local'));
   let mode = LS.get('nff.provider');
   if (!ids.includes(mode)) mode = ids[0];
   $('modes').innerHTML = ids.map((id) =>
@@ -32,9 +34,11 @@
   function refreshProvider() {
     const p = PROVIDERS[getMode()];
     document.querySelectorAll('.mode').forEach((el) => el.classList.toggle('on', el.dataset.id === p.id));
+    $('diag').hidden = p.id !== 'local';
     $('demoBanner').hidden = p.id !== 'demo';
     $('keyBox').style.display = p.needsKey ? '' : 'none';
     $('hint').textContent = {
+      local: 'Программа работает на вашем компьютере: запросы к реестрам идут с вашего IP, ничего не уходит на чужие серверы. Автоматически проверяются статус в ЕГРЮЛ и РНП, по остальным факторам — ссылки для ручной проверки. Диагностика нужна, чтобы подключить остальные реестры.',
       spark: 'Подключение к СПАРК в работе: пока выбрать этот режим можно, но проверка не запустится.',
       checko: 'Тестовый режим разработчика.',
       demo: 'Демо-режим: данные вымышленные. Введите любые названия или ИНН, чтобы увидеть, как выглядит таблица.',
@@ -42,6 +46,22 @@
   }
   document.querySelectorAll('input[name=mode]').forEach((el) => el.addEventListener('change', refreshProvider));
   refreshProvider();
+
+  $('diag').addEventListener('click', async () => {
+    const guess = ($('orgs').value.match(/\b\d{10}\b|\b\d{12}\b/) || [''])[0];
+    const inn = (prompt('ИНН организации для диагностики (10 или 12 цифр):', guess) || '').trim();
+    if (!inn) return;
+    $('status').textContent = 'Диагностика… это займёт около минуты';
+    try {
+      const r = await fetch('/api/probe?inn=' + encodeURIComponent(inn));
+      const text = await r.text();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+      a.download = 'probe-output.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      $('status').textContent = 'Готово: файл probe-output.json скачан (копия лежит в папке local). Пришлите его разработчику.';
+    } catch (e) { $('status').textContent = 'Диагностика не удалась: ' + e.message; }
+  });
 
   // --- run
   async function pool(items, n, fn) {
@@ -70,7 +90,7 @@
     $('run').disabled = true; $('download').disabled = true;
     $('status').textContent = `Проверено 0 из ${queries.length}…`;
 
-    await pool(queries, 2, async (q, idx) => {
+    await pool(queries, provider.id === 'local' ? 1 : 2, async (q, idx) => {
       try { results[idx] = await provider.check(q, opts); }
       catch (e) {
         const cells = {};

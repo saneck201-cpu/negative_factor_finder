@@ -333,6 +333,20 @@
     async check() { throw new Error(this.notReadyMessage); },
   };
 
-  global.PROVIDERS = { demo, spark, open, checko };
+  /* ---------- Программа на этом компьютере: запросы к реестрам делает local/server.js ---------- */
+  const local = {
+    id: 'local',
+    title: 'Программа на этом компьютере',
+    needsKey: false,
+    async check(query, opts) {
+      const r = await fetch('/api/check?' + new URLSearchParams({ q: query, factors: opts.factors.map((f) => f.id).join(',') }));
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status);
+      return j;
+    },
+  };
+
+  global.PROVIDERS = { local, demo, spark, open, checko };
   global.SOURCES_LIST = SRC;
+  global.OPEN_SRC = OPEN_SRC;
 })(typeof window !== 'undefined' ? window : globalThis);
